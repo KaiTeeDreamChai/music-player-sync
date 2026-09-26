@@ -144,26 +144,63 @@ Instead of relying on fragile web APIs or cookies, read the local SQLite databas
 
 ---
 
-## 4. Decoupled Taxonomy & Categorization Rules (歌单与目录解耦归类规范)
+## 4. Local-Anchored Selective Sync & Dynamic Playlist Rules (本地锚定选择性同步与动态歌单规范)
 
 > [!IMPORTANT]
-> **NetEase DB is an Ingestion Source, NOT a Direct Mirror for Local/DAP Folders.**
-> The playlists in NetEase Cloud Music and the folder structure in the Local Master Library / DAP have **NO strict 1:1 binding**. NetEase's local SQLite database serves primarily as a source for downloading raw assets, extracting metadata, matching LRC lyrics, and reading tags.
+> **Local Master Library Folders Act as the Sync Whitelist.**
+> NetEase Cloud Music contains many online playlists that do NOT need to be synchronized. Only playlists that **already exist as directories in the Local Master Library** (or explicitly designated by the user) are eligible for synchronization with their NetEase counterparts.
 
-When organizing songs into local and player folders:
-1. **User-Curated Custom Taxonomy (用户自主组织体系)**:
-   * The local and DAP folder structure is organized by user preference into:
-     * **Full Albums** (e.g., `Blonde`, `Dawn FM`, `Graduation`, `Random Access Memories`)
-     * **Genre Collections** (e.g., `R n B`, `00s R&B`, `'90s Hip-Hop Essentials`, `A Toda Cuba Le Gusta`)
-     * **Mood / Scene Playlists** (e.g., `avg local bar`, `some soul`, `by the time we rest`, `亿万人.......听Emo摇滚`)
-     * **Personal Favorites & Loops** (e.g., `我的喜欢`, `本周循环`)
-2. **Strict No-Implicit-Deletion Policy (严禁依据云端歌单盲目删歌)**:
-   * **NEVER delete, prune, or overwrite** songs in local or DAP folders simply because they do not appear in, or were removed from, an online NetEase playlist (`playlistTrackIds`).
-   * Removals must only occur under explicit user instruction.
-3. **Multi-Folder / Multi-Playlist Inclusion (多目录分发规则)**:
-   * If a song belongs to multiple target collections (e.g., present in both an album folder and a mood folder like `some soul` or `我的喜欢`), **duplicate the audio file and its matching `.lrc` file** into each corresponding folder.
-4. **New Download Ingestion & Dispatch (新下载入库与归类)**:
-   * When new songs are downloaded via NetEase Cloud Music, the Agent inspects their metadata and **confirms with the user** which local folder(s) they should be categorized into, rather than blindly forcing them into NetEase's online playlist names.
+### A. The Local-Anchored Whitelist Principle (本地目录白名单原则)
+1. **Selective Ingestion**:
+   * Do NOT synchronize arbitrary or unindexed NetEase playlists.
+   * Only playlists matching existing folders in the Local Master Library (e.g., `本周循环`, `some soul`, `亿万人.......听Emo摇滚`, `我的喜欢`) are tracked.
+2. **Static Albums & Archives (静态专辑与分类目录)**:
+   * Full album folders (e.g., `Blonde`, `Dawn FM`, `Graduation`) and genre collections (e.g., `R n B`, `'90s Hip-Hop Essentials`) are curated collections.
+   * Never implicitly prune or alter static folders based on external cloud changes.
+
+### B. Dynamic Playlist Workflow (动态轮换歌单规范，以「本周循环」为例)
+Playlists such as `本周循环` are dynamic rotations modified by the user on NetEase Cloud Music on a recurring basis (e.g., weekly additions and removals).
+
+1. **User-Triggered On-Demand Sync**:
+   * Synchronization is triggered **only when the user explicitly notifies the Agent** (e.g., *"我在网易云修改好了本周循环，帮我转码并同步到本地曲库"*).
+2. **Differential Track Comparison (差量比对)**:
+   * Query the latest track list from NetEase DB (`playlistTrackIds` for `本周循环`, ID: `18396002032`).
+   * Compare against the existing audio files in `MasterLibrary/本周循环/`.
+3. **Automated Asset Ingestion & Processing**:
+   * **Newly Added Tracks**:
+     * Retrieve the downloaded source audio (`.flac`, `.mp3`, or `.ncm` in `VipSongsDownload`).
+     * Decrypt `.ncm` to standard FLAC/MP3 if necessary.
+     * Enforce hardware specs: transcode sample rate/bit depth as configured.
+     * Standardize embedded cover to strictly **<= 100 KB Baseline JPEG (max 500×500 px)**.
+     * Extract, sanitize (strip JSON headers), and match `.lrc` lyric file.
+     * Place the processed audio and `.lrc` into `MasterLibrary/本周循环/`.
+   * **Removed Tracks (Rotation Offloading)**:
+     * Remove tracks from `MasterLibrary/本周循环/` that the user has cycled out of this week's rotation.
+4. **Multi-Playlist Inclusion**:
+   * If a song in `本周循环` also exists in another collection (e.g. an album or `我的喜欢`), it is maintained as an independent 1:1 copy inside `本周循环/` with its own `.lrc`.
+
+### C. Strict Two-Stage Delivery Gate (严格的两阶段交付门禁)
+The synchronization pipeline is strictly separated into two independent phases:
+
+```
+[Phase 1: Local Staging (User-Triggered)]
+ NetEase Cloud Music ──► Transcoding / Sanitization ──► Local Master Library (SSD)
+                                                              │
+                                                              ▼
+                                               [User Approval Gate 🔒]
+                                               "是否传到 TF 卡或 MP3 中？"
+                                                              │
+[Phase 2: Hardware Push (Explicit Approval Only)]              ▼
+ Local Master Library ────────────────────────────────► TF Card / DAP (J:\)
+```
+
+1. **Phase 1 (NetEase -> Local Master Library)**:
+   * Executed upon user notification. Performs all decryption, transcoding, cover standardization, lyric pairing, and folder updates entirely within the local SSD master library.
+   * Reports the differential summary (tracks added, tracks pruned, hardware compliance) to the user.
+2. **Phase 2 (Local Master Library -> TF Card / DAP)**:
+   * **Mandatory User Confirmation Gate**: The Agent **MUST NEVER** automatically write or push changes to the external TF card or MP3 player (`J:\`).
+   * The transfer to hardware occurs **only after the user explicitly reviews the local update and confirms the push**.
+
 
 
 ---
