@@ -144,12 +144,27 @@ Instead of relying on fragile web APIs or cookies, read the local SQLite databas
 
 ---
 
-## 4. Multi-Playlist Categorization Rules
+## 4. Decoupled Taxonomy & Categorization Rules (歌单与目录解耦归类规范)
 
-When organizing songs into folders:
-1. **Multi-Playlist Inclusion**: If a song appears in multiple playlists (e.g., in both `some soul` and `亿万人.......听Emo摇滚`), **duplicate the audio file and its matching `.lrc` file** into each playlist folder.
-2. **Uncategorized Fallback**: If a downloaded song does not belong to any specific playlist, place it into the `我的喜欢` (My Favorites) folder.
-3. **Playlist Removal**: If a track is removed from an online playlist (detected via `playlistTrackIds`), remove it from the corresponding local folder (preserving it in `我的喜欢` or other playlists if still indexed there).
+> [!IMPORTANT]
+> **NetEase DB is an Ingestion Source, NOT a Direct Mirror for Local/DAP Folders.**
+> The playlists in NetEase Cloud Music and the folder structure in the Local Master Library / DAP have **NO strict 1:1 binding**. NetEase's local SQLite database serves primarily as a source for downloading raw assets, extracting metadata, matching LRC lyrics, and reading tags.
+
+When organizing songs into local and player folders:
+1. **User-Curated Custom Taxonomy (用户自主组织体系)**:
+   * The local and DAP folder structure is organized by user preference into:
+     * **Full Albums** (e.g., `Blonde`, `Dawn FM`, `Graduation`, `Random Access Memories`)
+     * **Genre Collections** (e.g., `R n B`, `00s R&B`, `'90s Hip-Hop Essentials`, `A Toda Cuba Le Gusta`)
+     * **Mood / Scene Playlists** (e.g., `avg local bar`, `some soul`, `by the time we rest`, `亿万人.......听Emo摇滚`)
+     * **Personal Favorites & Loops** (e.g., `我的喜欢`, `本周循环`)
+2. **Strict No-Implicit-Deletion Policy (严禁依据云端歌单盲目删歌)**:
+   * **NEVER delete, prune, or overwrite** songs in local or DAP folders simply because they do not appear in, or were removed from, an online NetEase playlist (`playlistTrackIds`).
+   * Removals must only occur under explicit user instruction.
+3. **Multi-Folder / Multi-Playlist Inclusion (多目录分发规则)**:
+   * If a song belongs to multiple target collections (e.g., present in both an album folder and a mood folder like `some soul` or `我的喜欢`), **duplicate the audio file and its matching `.lrc` file** into each corresponding folder.
+4. **New Download Ingestion & Dispatch (新下载入库与归类)**:
+   * When new songs are downloaded via NetEase Cloud Music, the Agent inspects their metadata and **confirms with the user** which local folder(s) they should be categorized into, rather than blindly forcing them into NetEase's online playlist names.
+
 
 ---
 
