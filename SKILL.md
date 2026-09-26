@@ -114,7 +114,8 @@ Instead of relying on fragile web APIs or cookies, read the local SQLite databas
 * **macOS**:
   `~/Library/Application Support/com.netease.163music/Documents/storage/sqlite_storage.sqlite3`
 * **Windows**:
-  `%LOCALAPPDATA%\Netease\CloudMusic\storage\sqlite_storage.sqlite3`
+  `%LOCALAPPDATA%\NetEase\CloudMusic\Library\webdb.dat` (Modern 3.x+ / x64 client)
+  `%LOCALAPPDATA%\Netease\CloudMusic\storage\sqlite_storage.sqlite3` (Legacy client)
   (or `%APPDATA%\Netease\CloudMusic\storage\sqlite_storage.sqlite3`)
 * **Linux**:
   `~/.local/share/netease-cloud-music/storage/sqlite_storage.sqlite3`
@@ -282,6 +283,31 @@ def clean_platform_artifacts(target_dir):
                     os.remove(os.path.join(root, f))
                 except OSError:
                     pass
+
+def find_netease_db():
+    """Detect cross-platform NetEase Cloud Music local SQLite database path."""
+    candidates = []
+    if sys.platform == "win32":
+        local_app = os.environ.get("LOCALAPPDATA", "")
+        app_data = os.environ.get("APPDATA", "")
+        candidates.extend([
+            os.path.join(local_app, "NetEase", "CloudMusic", "Library", "webdb.dat"),
+            os.path.join(local_app, "Netease", "CloudMusic", "storage", "sqlite_storage.sqlite3"),
+            os.path.join(app_data, "Netease", "CloudMusic", "storage", "sqlite_storage.sqlite3"),
+        ])
+    elif sys.platform == "darwin":
+        home = os.path.expanduser("~")
+        candidates.append(os.path.join(home, "Library/Application Support/com.netease.163music/Documents/storage/sqlite_storage.sqlite3"))
+    else:
+        home = os.path.expanduser("~")
+        candidates.extend([
+            os.path.join(home, ".local/share/netease-cloud-music/storage/sqlite_storage.sqlite3"),
+            os.path.join(home, ".config/netease-cloud-music/storage/sqlite_storage.sqlite3"),
+        ])
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
 ```
 
 ---

@@ -115,5 +115,36 @@ def clean_platform_artifacts(target_dir):
                 except OSError:
                     pass
 
+def find_netease_db():
+    """Detect cross-platform NetEase Cloud Music local SQLite database path."""
+    candidates = []
+    if sys.platform == "win32":
+        local_app = os.environ.get("LOCALAPPDATA", "")
+        app_data = os.environ.get("APPDATA", "")
+        candidates.extend([
+            os.path.join(local_app, "NetEase", "CloudMusic", "Library", "webdb.dat"),
+            os.path.join(local_app, "Netease", "CloudMusic", "storage", "sqlite_storage.sqlite3"),
+            os.path.join(app_data, "Netease", "CloudMusic", "storage", "sqlite_storage.sqlite3"),
+        ])
+    elif sys.platform == "darwin":
+        home = os.path.expanduser("~")
+        candidates.append(os.path.join(home, "Library/Application Support/com.netease.163music/Documents/storage/sqlite_storage.sqlite3"))
+    else:
+        home = os.path.expanduser("~")
+        candidates.extend([
+            os.path.join(home, ".local/share/netease-cloud-music/storage/sqlite_storage.sqlite3"),
+            os.path.join(home, ".config/netease-cloud-music/storage/sqlite_storage.sqlite3"),
+        ])
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
 if __name__ == "__main__":
     print("DAP Sync Utility loaded.")
+    db = find_netease_db()
+    if db:
+        print(f"[OK] NetEase Local DB Detected: {db}")
+    else:
+        print("[WARN] NetEase Local DB not found.")
+
